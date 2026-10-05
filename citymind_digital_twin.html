@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CITYMIND — Multi-Agent Digital Twin for Urban Mobility</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            500: '#10b981',
+                            600: '#059669',
+                            900: '#064e3b',
+                            dark: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js for Live Telemetry -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-screen flex flex-col overflow-hidden">
+
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0 shadow-lg">
+        <div class="flex items-center space-x-3">
+            <div class="bg-emerald-500/10 border border-emerald-500/30 p-2 rounded-xl text-emerald-400 flex items-center justify-center shadow-inner">
+                <i data-lucide="cpu" class="w-6 h-6 animate-pulse"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="font-bold text-lg tracking-wide bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">CITYMIND</h1>
+                    <span class="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono">v2.4 ACTIVE TWIN</span>
+                </div>
+                <p class="text-xs text-slate-400">Multi-Agent Digital Twin & Urban Mobility Orchestrator</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <div class="hidden md:flex items-center space-x-4 bg-slate-950/60 px-4 py-1.5 rounded-lg border border-slate-800 text-xs font-mono">
+                <div class="flex items-center space-x-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span class="text-slate-400">Sim Ticks:</span> <span id="metric-ticks" class="text-emerald-400 font-bold">0</span>
+                </div>
+                <div class="text-slate-600">|</div>
+                <div class="flex items-center space-x-1.5">
+                    <span class="text-slate-400">Active Agents:</span> <span id="metric-agents-count" class="text-cyan-400 font-bold">0</span>
+                </div>
+                <div class="text-slate-600">|</div>
+                <div class="flex items-center space-x-1.5">
+                    <span class="text-slate-400">Network Health:</span> <span id="metric-health" class="text-emerald-400 font-bold">98%</span>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <button id="btn-pause-sim" onclick="toggleSimulation()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition shadow-md shadow-emerald-900/30">
+                    <i data-lucide="pause" class="w-3.5 h-3.5" id="pause-icon"></i>
+                    <span id="pause-text">Pause Sim</span>
+                </button>
+                <button onclick="resetSimulation()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition border border-slate-700">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                    <span>Reset</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- SIDEBAR: Controls & AI Co-Pilot -->
+        <aside class="w-96 bg-slate-900/90 border-r border-slate-800 flex flex-col shrink-0 z-10">
+            <!-- Tabs Header -->
+            <div class="flex border-b border-slate-800 bg-slate-950/40">
+                <button onclick="switchTab('controls')" id="tab-btn-controls" class="flex-1 py-3 px-4 text-xs font-semibold text-emerald-400 border-b-2 border-emerald-500 flex items-center justify-center space-x-2 transition">
+                    <i data-lucide="sliders" class="w-4 h-4"></i>
+                    <span>Intervention Controls</span>
+                </button>
+                <button onclick="switchTab('copilot')" id="tab-btn-copilot" class="flex-1 py-3 px-4 text-xs font-semibold text-slate-400 border-b-2 border-transparent hover:text-slate-200 flex items-center justify-center space-x-2 transition">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i>
+                    <span>AI Co-Pilot & Insights</span>
+                </button>
+            </div>
+
+            <!-- Tab Content Area -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                
+                <!-- Tab 1: Intervention Controls -->
+                <div id="tab-controls" class="space-y-4">
+                    <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/80">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
+                                <i data-lucide="activity" class="w-3.5 h-3.5 text-emerald-400"></i>
+                                <span>Scenario Injector</span>
+                            </span>
+                            <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Live Cascade</span>
+                        </div>
+                        <p class="text-xs text-slate-400 leading-relaxed">Trigger stress tests on the virtual city grid to observe multi-agent reactions and cascading bottlenecks.</p>
+                    </div>
+
+                    <!-- Action 1: Close Road -->
+                    <div class="bg-slate-800/40 hover:bg-slate-800/80 transition border border-slate-700/60 rounded-xl p-3.5 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2.5">
+                                <div class="p-2 bg-amber-500/10 text-amber-400 rounded-lg border border-amber-500/20">
+                                    <i data-lucide="construction" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-200">Close Major Road</h4>
+                                    <p class="text-[11px] text-slate-400">Block 5th Ave / Central Junction</p>
+                                </div>
+                            </div>
+                            <span id="badge-road" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">OPEN</span>
+                        </div>
+                        <button onclick="toggleIntervention('road')" id="btn-action-road" class="w-full py-2 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                            <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                            <span id="text-action-road">Trigger Road Closure</span>
+                        </button>
+                    </div>
+
+                    <!-- Action 2: Add Buses -->
+                    <div class="bg-slate-800/40 hover:bg-slate-800/80 transition border border-slate-700/60 rounded-xl p-3.5 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2.5">
+                                <div class="p-2 bg-blue-500/10 text-blue-400 rounded-lg border border-blue-500/20">
+                                    <i data-lucide="bus" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-200">Surge Transit Fleet</h4>
+                                    <p class="text-[11px] text-slate-400">Deploy +12 Express Buses</p>
+                                </div>
+                            </div>
+                            <span id="badge-buses" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">STANDARD</span>
+                        </div>
+                        <button onclick="toggleIntervention('buses')" id="btn-action-buses" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                            <span id="text-action-buses">Deploy Extra Buses</span>
+                        </button>
+                    </div>
+
+                    <!-- Action 3: Stadium Event -->
+                    <div class="bg-slate-800/40 hover:bg-slate-800/80 transition border border-slate-700/60 rounded-xl p-3.5 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2.5">
+                                <div class="p-2 bg-purple-500/10 text-purple-400 rounded-lg border border-purple-500/20">
+                                    <i data-lucide="ticket" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-200">Stadium Event Rush</h4>
+                                    <p class="text-[11px] text-slate-400">+50,000 Commuters Downtown</p>
+                                </div>
+                            </div>
+                            <span id="badge-stadium" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">NORMAL</span>
+                        </div>
+                        <button onclick="toggleIntervention('stadium')" id="btn-action-stadium" class="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                            <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                            <span id="text-action-stadium">Host Large Event</span>
+                        </button>
+                    </div>
+
+                    <!-- Action 4: EV Demand -->
+                    <div class="bg-slate-800/40 hover:bg-slate-800/80 transition border border-slate-700/60 rounded-xl p-3.5 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2.5">
+                                <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20">
+                                    <i data-lucide="zap" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-200">Surge EV Charging Demand</h4>
+                                    <p class="text-[11px] text-slate-400">Peak grid strain on hubs</p>
+                                </div>
+                            </div>
+                            <span id="badge-ev" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">STABLE</span>
+                        </div>
+                        <button onclick="toggleIntervention('ev')" id="btn-action-ev" class="w-full py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                            <i data-lucide="battery-charging" class="w-3.5 h-3.5"></i>
+                            <span id="text-action-ev">Increase EV Demand</span>
+                        </button>
+                    </div>
+
+                    <!-- Action 5: Emergency Dispatch -->
+                    <div class="bg-slate-800/40 hover:bg-slate-800/80 transition border border-slate-700/60 rounded-xl p-3.5 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2.5">
+                                <div class="p-2 bg-rose-500/10 text-rose-400 rounded-lg border border-rose-500/20">
+                                    <i data-lucide="siren" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-200">Emergency Dispatch</h4>
+                                    <p class="text-[11px] text-slate-400">Priority green-wave routing</p>
+                                </div>
+                            </div>
+                            <span id="badge-emergency" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">STANDBY</span>
+                        </div>
+                        <button onclick="toggleIntervention('emergency')" id="btn-action-emergency" class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                            <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                            <span id="text-action-emergency">Dispatch Ambulance</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab 2: AI Co-Pilot Insights -->
+                <div id="tab-copilot" class="space-y-4 hidden">
+                    <div class="bg-gradient-to-br from-emerald-950/40 to-slate-900 border border-emerald-500/30 p-3.5 rounded-xl space-y-3">
+                        <div class="flex items-center space-x-2 text-emerald-400">
+                            <i data-lucide="bot" class="w-4 h-4"></i>
+                            <span class="text-xs font-bold uppercase tracking-wider">CITYMIND AI Co-Pilot</span>
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed" id="copilot-summary-text">
+                            System operating at baseline parameters. No active road closures or major disruptions detected. Passenger congestion indices remain within sustainable thresholds.
+                        </p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Counterfactual Predictions</span>
+                        <div class="space-y-2" id="copilot-recommendations-list">
+                            <div class="bg-slate-800/40 border border-slate-700/60 p-3 rounded-lg text-xs space-y-1">
+                                <div class="flex items-center justify-between font-semibold text-slate-200">
+                                    <span>Optimal Transit Strategy</span>
+                                    <span class="text-[10px] text-emerald-400 font-mono">94% Confidence</span>
+                                </div>
+                                <p class="text-slate-400">Adding 10 buses during peak stadium egress reduces average commuter delay by 22% compared to unmitigated road bottlenecks.</p>
+                            </div>
+                            <div class="bg-slate-800/40 border border-slate-700/60 p-3 rounded-lg text-xs space-y-1">
+                                <div class="flex items-center justify-between font-semibold text-slate-200">
+                                    <span>EV Grid Load Warning</span>
+                                    <span class="text-[10px] text-amber-400 font-mono">Moderate Risk</span>
+                                </div>
+                                <p class="text-slate-400">Simultaneous charging surge in downtown sector 4 may increase station queue wait times to 18.4 minutes.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <button onclick="runAiSynthesis()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-2 shadow-md shadow-emerald-900/30">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                            <span>Run Counterfactual Policy Synthesis</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- CENTER: Interactive City Simulation Canvas -->
+        <main class="flex-1 flex flex-col bg-slate-950 relative overflow-hidden">
+            
+            <!-- Canvas Overlay Header / Legend -->
+            <div class="absolute top-4 left-4 z-10 flex items-center space-x-2 bg-slate-900/80 backdrop-blur-md border border-slate-800 px-3 py-2 rounded-xl text-xs shadow-lg">
+                <span class="font-semibold text-slate-300 flex items-center space-x-1.5">
+                    <i data-lucide="map" class="w-3.5 h-3.5 text-emerald-400"></i>
+                    <span>City Grid Model:</span>
+                </span>
+                <div class="flex items-center space-x-3 text-[11px] text-slate-400 ml-2">
+                    <span class="flex items-center space-x-1"><span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span><span>Commuters</span></span>
+                    <span class="flex items-center space-x-1"><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span><span>Buses</span></span>
+                    <span class="flex items-center space-x-1"><span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span><span>EV Hubs</span></span>
+                    <span class="flex items-center space-x-1"><span class="w-2 h-2 rounded-full bg-rose-500 inline-block"></span><span>Emergency</span></span>
+                </div>
+            </div>
+
+            <!-- Canvas Container -->
+            <div class="flex-1 relative cursor-crosshair">
+                <canvas id="cityCanvas" class="w-full h-full block"></canvas>
+            </div>
+
+            <div class="h-44 bg-slate-900/90 border-t border-slate-800 p-4 grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0 shadow-2xl">
+                
+                <!-- Metric Card 1 -->
+                <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-400">Avg Commuter Delay</span>
+                        <div class="p-1.5 bg-cyan-500/10 text-cyan-400 rounded-lg">
+                            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                        </div>
+                    </div>
+                    <div class="flex items-baseline space-x-2">
+                        <span class="text-2xl font-bold text-slate-100 font-mono" id="val-delay">4.2</span>
+                        <span class="text-xs text-slate-400">mins / trip</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div id="bar-delay" class="bg-cyan-500 h-full w-[35%] transition-all duration-500"></div>
+                    </div>
+                </div>
+
+                <!-- Metric Card 2 -->
+                <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-400">Public Transport Load</span>
+                        <div class="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg">
+                            <i data-lucide="bus" class="w-3.5 h-3.5"></i>
+                        </div>
+                    </div>
+                    <div class="flex items-baseline space-x-2">
+                        <span class="text-2xl font-bold text-slate-100 font-mono" id="val-transit-load">68</span>
+                        <span class="text-xs text-slate-400">% capacity</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div id="bar-transit" class="bg-blue-500 h-full w-[68%] transition-all duration-500"></div>
+                    </div>
+                </div>
+
+                <!-- Metric Card 3 -->
+                <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-400">EV Station Queue</span>
+                        <div class="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                            <i data-lucide="battery-charging" class="w-3.5 h-3.5"></i>
+                        </div>
+                    </div>
+                    <div class="flex items-baseline space-x-2">
+                        <span class="text-2xl font-bold text-slate-100 font-mono" id="val-ev-queue">3.1</span>
+                        <span class="text-xs text-slate-400">cars / station</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div id="bar-ev" class="bg-emerald-500 h-full w-[30%] transition-all duration-500"></div>
+                    </div>
+                </div>
+
+                <!-- Metric Card 4 -->
+                <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-400">Traffic Congestion Index</span>
+                        <div class="p-1.5 bg-amber-500/10 text-amber-400 rounded-lg">
+                            <i data-lucide="activity" class="w-3.5 h-3.5"></i>
+                        </div>
+                    </div>
+                    <div class="flex items-baseline space-x-2">
+                        <span class="text-2xl font-bold text-slate-100 font-mono" id="val-congestion">2.4</span>
+                        <span class="text-xs text-slate-400">/ 10.0 scale</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div id="bar-congestion" class="bg-amber-500 h-full w-[24%] transition-all duration-500"></div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // --- SIMULATION STATE ---
+        let isPaused = false;
+        let simulationTicks = 0;
+        let activeInterventions = {
+            road: false,
+            buses: false,
+            stadium: false,
+            ev: false,
+            emergency: false
+        };
+
+        // Metrics State
+        let metrics = {
+            delay: 4.2,
+            transitLoad: 68,
+            evQueue: 3.1,
+            congestion: 2.4,
+            activeAgentsCount: 0,
+            health: 98
+        };
+
+        // Canvas Setup
+        const canvas = document.getElementById('cityCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- CITY GRAPH & AGENTS ---
+        // Nodes representing intersections, transit hubs, EV charging stations, stadium
+        const nodes = [
+            { id: 'north_hub', x: 0.25, y: 0.2, type: 'transit', label: 'North Station' },
+            { id: 'west_junction', x: 0.2, y: 0.5, type: 'intersection', label: '5th Ave Junction' },
+            { id: 'downtown_core', x: 0.5, y: 0.5, type: 'downtown', label: 'Downtown Core' },
+            { id: 'east_ev', x: 0.8, y: 0.3, type: 'ev', label: 'EV SuperHub' },
+            { id: 'stadium', x: 0.75, y: 0.75, type: 'stadium', label: 'Metropolitan Stadium' },
+            { id: 'south_depot', x: 0.3, y: 0.8, type: 'transit', label: 'South Transit Depot' }
+        ];
+
+        const roads = [
+            { from: 'north_hub', to: 'west_junction', name: 'North Corridor' },
+            { from: 'west_junction', to: 'downtown_core', name: '5th Avenue (Main)' },
+            { from: 'downtown_core', to: 'east_ev', name: 'Eastern Expressway' },
+            { from: 'downtown_core', to: 'stadium', name: 'Stadium Boulevard' },
+            { from: 'west_junction', to: 'south_depot', name: 'Southern Bypass' },
+            { from: 'north_hub', to: 'east_ev', name: 'Ring Road North' },
+            { from: 'south_depot', to: 'stadium', name: 'Ring Road South' }
+        ];
+
+        // Agents list
+        let agents = [];
+
+        function initAgents() {
+            agents = [];
+            // Spawn commuters, buses, EVs, and emergency vehicles
+            for (let i = 0; i < 60; i++) {
+                agents.push({
+                    type: 'commuter',
+                    roadIndex: Math.floor(Math.random() * roads.length),
+                    progress: Math.random(),
+                    speed: 0.003 + Math.random() * 0.004,
+                    color: '#38bdf8'
+                });
+            }
+            for (let i = 0; i < 12; i++) {
+                agents.push({
+                    type: 'bus',
+                    roadIndex: Math.floor(Math.random() * roads.length),
+                    progress: Math.random(),
+                    speed: 0.002 + Math.random() * 0.002,
+                    color: '#3b82f6'
+                });
+            }
+            for (let i = 0; i < 15; i++) {
+                agents.push({
+                    type: 'ev',
+                    roadIndex: Math.floor(Math.random() * roads.length),
+                    progress: Math.random(),
+                    speed: 0.0025 + Math.random() * 0.003,
+                    color: '#10b981'
+                });
+            }
+        }
+        initAgents();
+
+        // --- INTERVENTION CONTROLS ---
+        function toggleIntervention(type) {
+            activeInterventions[type] = !activeInterventions[type];
+            const btn = document.getElementById(`btn-action-${type}`);
+            const badge = document.getElementById(`badge-${type}`);
+            const text = document.getElementById(`text-action-${type}`);
+
+            if (activeInterventions[type]) {
+                badge.className = "text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse";
+                if (type === 'road') {
+                    badge.innerText = "CLOSED";
+                    text.innerText = "Reopen Road";
+                    btn.className = "w-full py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 border border-amber-500/40";
+                    metrics.congestion += 3.8;
+                    metrics.delay += 6.5;
+                    metrics.health -= 15;
+                } else if (type === 'buses') {
+                    badge.innerText = "SURGED (+12)";
+                    text.innerText = "Remove Extra Buses";
+                    btn.className = "w-full py-2 bg-slate-800 hover:bg-slate-700 text-blue-400 font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 border border-blue-500/40";
+                    metrics.transitLoad = 42;
+                    metrics.delay -= 2.1;
+                } else if (type === 'stadium') {
+                    badge.innerText = "EVENT ACTIVE";
+                    text.innerText = "End Stadium Event";
+                    btn.className = "w-full py-2 bg-slate-800 hover:bg-slate-700 text-purple-400 font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 border border-purple-500/40";
+                    metrics.congestion += 4.5;
+                    metrics.transitLoad += 25;
+                    metrics.delay += 5.2;
+                } else if (type === 'ev') {
+                    badge.innerText = "HIGH DEMAND";
+                    text.innerText = "Normalize EV Demand";
+                    btn.className = "w-full py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 border border-emerald-500/40";
+                    metrics.evQueue += 5.4;
+                } else if (type === 'emergency') {
+                    badge.innerText = "DISPATCHED";
+                    text.innerText = "Clear Emergency";
+                    btn.className = "w-full py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 border border-rose-500/40";
+                    // Add emergency vehicle agent
+                    agents.push({ type: 'emergency', roadIndex: 1, progress: 0, speed: 0.008, color: '#f43f5e' });
+                    metrics.congestion -= 1.0;
+                }
+            } else {
+                badge.className = "text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700";
+                if (type === 'road') {
+                    badge.innerText = "OPEN";
+                    text.innerText = "Trigger Road Closure";
+                    btn.className = "w-full py-2 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 shadow-sm";
+                    metrics.congestion = Math.max(2.0, metrics.congestion - 3.8);
+                    metrics.delay = Math.max(3.0, metrics.delay - 6.5);
+                    metrics.health = Math.min(100, metrics.health + 15);
+                } else if (type === 'buses') {
+                    badge.innerText = "STANDARD";
+                    text.innerText = "Deploy Extra Buses";
+                    btn.className = "w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 shadow-sm";
+                    metrics.transitLoad = 68;
+                } else if (type === 'stadium') {
+                    badge.innerText = "NORMAL";
+                    text.innerText = "Host Large Event";
+                    btn.className = "w-full py-2 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 shadow-sm";
+                    metrics.congestion = Math.max(2.0, metrics.congestion - 4.5);
+                    metrics.transitLoad = 68;
+                } else if (type === 'ev') {
+                    badge.innerText = "STABLE";
+                    text.innerText = "Increase EV Demand";
+                    btn.className = "w-full py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 shadow-sm";
+                    metrics.evQueue = 3.1;
+                } else if (type === 'emergency') {
+                    badge.innerText = "STANDBY";
+                    text.innerText = "Dispatch Ambulance";
+                    btn.className = "w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg text-xs transition flex items-center justify-center space-x-1.5 shadow-sm";
+                }
+            }
+            updateCoPilotSummary();
+            updateMetricsUI();
+        }
+
+        function updateCoPilotSummary() {
+            const summaryEl = document.getElementById('copilot-summary-text');
+            if (activeInterventions.road && activeInterventions.stadium) {
+                summaryEl.innerText = "CRITICAL ALERT: Simultaneous Road Closure and Stadium Event have created severe gridlock on 5th Avenue. Recommending immediate transit corridor redirection and automated traffic light phasing.";
+            } else if (activeInterventions.road) {
+                summaryEl.innerText = "Road closure on 5th Avenue is forcing 40% of commuter agents onto Ring Road bypasses, increasing localized delay by +6.5 minutes.";
+            } else if (activeInterventions.stadium) {
+                summaryEl.innerText = "Stadium event surge active. Passenger outflow peaked at node 'Metropolitan Stadium'. Public transport capacity is absorbing 75% of pedestrian overflow.";
+            } else {
+                summaryEl.innerText = "System operating at baseline parameters. No active major disruptions detected. Passenger congestion indices remain within sustainable thresholds.";
+            }
+        }
+
+        function updateMetricsUI() {
+            document.getElementById('val-delay').innerText = metrics.delay.toFixed(1);
+            document.getElementById('bar-delay').style.width = `${Math.min(100, metrics.delay * 10)}%`;
+
+            document.getElementById('val-transit-load').innerText = metrics.transitLoad;
+            document.getElementById('bar-transit').style.width = `${metrics.transitLoad}%`;
+
+            document.getElementById('val-ev-queue').innerText = metrics.evQueue.toFixed(1);
+            document.getElementById('bar-ev').style.width = `${Math.min(100, metrics.evQueue * 15)}%`;
+
+            document.getElementById('val-congestion').innerText = metrics.congestion.toFixed(1);
+            document.getElementById('bar-congestion').style.width = `${Math.min(100, metrics.congestion * 10)}%`;
+
+            document.getElementById('metric-agents-count').innerText = agents.length;
+            document.getElementById('metric-health').innerText = `${Math.max(20, Math.round(metrics.health))}%`;
+            document.getElementById('metric-health').className = metrics.health > 70 ? 'text-emerald-400 font-bold' : (metrics.health > 40 ? 'text-amber-400 font-bold' : 'text-rose-400 font-bold');
+        }
+
+        // --- SIMULATION LOOP & RENDERING ---
+        function toggleSimulation() {
+            isPaused = !isPaused;
+            document.getElementById('pause-text').innerText = isPaused ? 'Resume Sim' : 'Pause Sim';
+            const icon = document.getElementById('pause-icon');
+            icon.setAttribute('data-lucide', isPaused ? 'play' : 'pause');
+            lucide.createIcons();
+        }
+
+        function resetSimulation() {
+            simulationTicks = 0;
+            for (let key in activeInterventions) {
+                if (activeInterventions[key]) {
+                    toggleIntervention(key);
+                }
+            }
+            metrics = { delay: 4.2, transitLoad: 68, evQueue: 3.1, congestion: 2.4, activeAgentsCount: 0, health: 98 };
+            initAgents();
+            updateMetricsUI();
+        }
+
+        function runAiSynthesis() {
+            const list = document.getElementById('copilot-recommendations-list');
+            const newItem = document.createElement('div');
+            newItem.className = "bg-emerald-950/40 border border-emerald-500/40 p-3 rounded-lg text-xs space-y-1 animate-pulse";
+            newItem.innerHTML = `
+                <div class="flex items-center justify-between font-semibold text-emerald-300">
+                    <span>Counterfactual Synthesis Complete</span>
+                    <span class="text-[10px] text-emerald-400 font-mono">Just Now</span>
+                </div>
+                <p class="text-slate-300">AI synthesized 1,024 simulation permutations. Recommended action: Synchronize traffic signals at 5th Ave Junction to reduce idle emission output by 14.8%.</p>
+            `;
+            list.prepend(newItem);
+        }
+
+        function switchTab(tabName) {
+            const controlsTab = document.getElementById('tab-controls');
+            const copilotTab = document.getElementById('tab-copilot');
+            const btnControls = document.getElementById('tab-btn-controls');
+            const btnCopilot = document.getElementById('tab-btn-copilot');
+
+            if (tabName === 'controls') {
+                controlsTab.classList.remove('hidden');
+                copilotTab.classList.add('hidden');
+                btnControls.className = "flex-1 py-3 px-4 text-xs font-semibold text-emerald-400 border-b-2 border-emerald-500 flex items-center justify-center space-x-2 transition";
+                btnCopilot.className = "flex-1 py-3 px-4 text-xs font-semibold text-slate-400 border-b-2 border-transparent hover:text-slate-200 flex items-center justify-center space-x-2 transition";
+            } else {
+                controlsTab.classList.add('hidden');
+                copilotTab.classList.remove('hidden');
+                btnCopilot.className = "flex-1 py-3 px-4 text-xs font-semibold text-emerald-400 border-b-2 border-emerald-500 flex items-center justify-center space-x-2 transition";
+                btnControls.className = "flex-1 py-3 px-4 text-xs font-semibold text-slate-400 border-b-2 border-transparent hover:text-slate-200 flex items-center justify-center space-x-2 transition";
+            }
+        }
+
+        function getNodeCoords(nodeId) {
+            const n = nodes.find(item => item.id === nodeId);
+            return { x: n.x * canvas.width, y: n.y * canvas.height };
+        }
+
+        function animate() {
+            if (!isPaused) {
+                simulationTicks++;
+                document.getElementById('metric-ticks').innerText = simulationTicks;
+
+                // Update agents along roads
+                agents.forEach(agent => {
+                    let road = roads[agent.roadIndex];
+                    // If road is closed and this is road index 1 (5th Avenue), slow or reroute
+                    let speedMult = 1.0;
+                    if (activeInterventions.road && agent.roadIndex === 1) {
+                        speedMult = 0.1; // Congestion / roadblock
+                    }
+                    if (activeInterventions.emergency && agent.type === 'emergency') {
+                        speedMult = 1.8; // Fast emergency vehicle
+                    }
+
+                    agent.progress += agent.speed * speedMult;
+                    if (agent.progress >= 1.0) {
+                        agent.progress = 0;
+                        // Pick next connected road
+                        agent.roadIndex = Math.floor(Math.random() * roads.length);
+                    }
+                });
+            }
+
+            // Render Canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid background subtle pattern
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            const gridSize = 40;
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            // Draw Roads (Edges)
+            roads.forEach((road, idx) => {
+                const fromCoords = getNodeCoords(road.from);
+                const toCoords = getNodeCoords(road.to);
+
+                ctx.beginPath();
+                ctx.moveTo(fromCoords.x, fromCoords.y);
+                ctx.lineTo(toCoords.x, toCoords.y);
+                
+                if (activeInterventions.road && idx === 1) {
+                    ctx.strokeStyle = '#f43f5e'; // Red for closed road
+                    ctx.lineWidth = 6;
+                    ctx.setLineDash([6, 6]);
+                } else {
+                    ctx.strokeStyle = '#334155';
+                    ctx.lineWidth = 4;
+                    ctx.setLineDash([]);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]); // reset
+
+                // Road Label
+                if (idx === 1 && activeInterventions.road) {
+                    ctx.fillStyle = '#f43f5e';
+                    ctx.font = '10px Inter, sans-serif';
+                    ctx.fillText('🚧 5th AVE CLOSED', (fromCoords.x + toCoords.x)/2 - 40, (fromCoords.y + toCoords.y)/2 - 10);
+                }
+            });
+
+            // Draw Nodes
+            nodes.forEach(node => {
+                const coords = getNodeCoords(node.id);
+                ctx.beginPath();
+                ctx.arc(coords.x, coords.y, node.type === 'downtown' || node.type === 'stadium' ? 16 : 10, 0, Math.PI * 2);
+                
+                if (node.type === 'stadium' && activeInterventions.stadium) {
+                    ctx.fillStyle = '#a855f7';
+                    ctx.shadowColor = '#a855f7';
+                    ctx.shadowBlur = 15;
+                } else if (node.type === 'ev' && activeInterventions.ev) {
+                    ctx.fillStyle = '#10b981';
+                    ctx.shadowColor = '#10b981';
+                    ctx.shadowBlur = 15;
+                } else {
+                    ctx.fillStyle = '#0f172a';
+                    ctx.shadowBlur = 0;
+                }
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = node.type === 'stadium' ? '#c084fc' : (node.type === 'ev' ? '#34d399' : '#64748b');
+                ctx.stroke();
+                ctx.shadowBlur = 0; // reset
+
+                // Node Label
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '11px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.label, coords.x, coords.y + 26);
+            });
+
+            // Draw Agents
+            agents.forEach(agent => {
+                let road = roads[agent.roadIndex];
+                let fromCoords = getNodeCoords(road.from);
+                let toCoords = getNodeCoords(road.to);
+
+                let x = fromCoords.x + (toCoords.x - fromCoords.x) * agent.progress;
+                let y = fromCoords.y + (toCoords.y - fromCoords.y) * agent.progress;
+
+                ctx.beginPath();
+                let radius = agent.type === 'bus' ? 6 : (agent.type === 'emergency' ? 7 : 4);
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = agent.color;
+                ctx.fill();
+
+                if (agent.type === 'emergency') {
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        // Start animation loop on window load
+        window.onload = function() {
+            animate();
+            updateMetricsUI();
+        };
+    </script>
+</body>
+</html>
